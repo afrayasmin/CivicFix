@@ -18,6 +18,7 @@ import com.bumptech.glide.Glide;
 import com.example.civicfix.databinding.ActivityReportBinding;
 import com.example.civicfix.db.AppDatabase;
 import com.example.civicfix.model.Report;
+import com.example.civicfix.network.GeocodingClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
@@ -37,6 +38,7 @@ public class ReportActivity extends AppCompatActivity {
     private double latitude;
     private double longitude;
     private boolean hasLocation = false;
+    private String address;     // from reverse geocoding; null if offline
 
     private final String[] categories = {
             Report.CAT_ROADS,
@@ -45,7 +47,7 @@ public class ReportActivity extends AppCompatActivity {
             Report.CAT_SANITATION
     };
 
-    // --- Activity result launchers (must be created before onStart) ---
+    // --- Activity result launchers ---
 
     private final ActivityResultLauncher<Uri> takePictureLauncher =
             registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
@@ -91,7 +93,7 @@ public class ReportActivity extends AppCompatActivity {
         binding.btnPhoto.setOnClickListener(v -> onTakePhotoClicked());
         binding.btnSubmit.setOnClickListener(v -> submitReport());
 
-        fetchLocation(); // start looking for a GPS fix as soon as the form opens
+        fetchLocation();
     }
 
     // ---------------- Camera ----------------
@@ -139,15 +141,37 @@ public class ReportActivity extends AppCompatActivity {
                         latitude = loc.getLatitude();
                         longitude = loc.getLongitude();
                         hasLocation = true;
-                        binding.tvLocation.setText(String.format(Locale.US,
-                                "Location: %.5f, %.5f (accuracy %.0f m)",
-                                latitude, longitude, loc.getAccuracy()));
+                        showLocation(null);
+                        lookupAddress(latitude, longitude);
                     } else {
                         binding.tvLocation.setText("Location: no GPS fix. Turn on Location and go outside.");
                     }
                 })
                 .addOnFailureListener(this, e ->
                         binding.tvLocation.setText("Location: failed to get GPS fix"));
+    }
+
+    // ---------------- Reverse geocoding ----------------
+
+    private void lookupAddress(double lat, double lon) {
+        address = null;
+        AppDatabase.dbExecutor.execute(() -> {
+            String result = GeocodingClient.reverse(lat, lon);
+            runOnUiThread(() -> {
+                address = result;
+                showLocation(result);
+            });
+        });
+    }
+
+    private void showLocation(String addr) {
+        String coords = String.format(Locale.US, "%.5f, %.5f", latitude, longitude);
+        if (addr != null) {
+            binding.tvLocation.setText("Location: " + addr + "\n(" + coords + ")");
+        } else {
+            binding.tvLocation.setText("Location: " + coords
+                    + "\n(street address will be added when online)");
+        }
     }
 
     // ---------------- Submit ----------------
@@ -183,10 +207,10 @@ public class ReportActivity extends AppCompatActivity {
         r.landmark = binding.etLandmark.getText().toString().trim();
         r.latitude = latitude;
         r.longitude = longitude;
+        r.address = address; // may be null if offline; the sync worker fills it later
         r.localPhotoPath = photoFile.getAbsolutePath();
         r.syncState = Report.SYNC_PENDING;
         r.createdAt = System.currentTimeMillis();
-        // r.address is filled in Step 5 (reverse geocoding)
 
         binding.btnSubmit.setEnabled(false);
         AppDatabase.dbExecutor.execute(() -> {
