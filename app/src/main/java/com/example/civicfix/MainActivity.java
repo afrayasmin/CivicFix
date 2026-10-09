@@ -1,34 +1,27 @@
 package com.example.civicfix;
 
+import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.civicfix.databinding.ActivityMainBinding;
 import com.example.civicfix.db.AppDatabase;
-import com.example.civicfix.model.Report;
+import com.example.civicfix.ui.ReportActivity;
 
 public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
 
-        AppDatabase db = AppDatabase.getInstance(this);
+        binding.btnNewReport.setOnClickListener(v ->
+                startActivity(new Intent(this, ReportActivity.class)));
 
-        // Observe all reports; this runs whenever the table changes
-        db.reportDao().getAllLive().observe(this, reports ->
-                Log.d("CivicFix", "Reports in DB: " + reports.size()));
-
-        // Insert one test report on a background thread
-        AppDatabase.dbExecutor.execute(() -> {
-            Report r = new Report();
-            r.category = Report.CAT_ROADS;
-            r.severity = Report.SEV_CRITICAL;
-            r.description = "Test pothole";
-            r.createdAt = System.currentTimeMillis();
-            db.reportDao().insert(r);
-        });
+        AppDatabase.getInstance(this).reportDao().getPendingCountLive()
+                .observe(this, count ->
+                        binding.tvPending.setText(count + " reports waiting to upload"));
     }
 }
