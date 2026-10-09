@@ -24,6 +24,9 @@ public interface ReportDao {
     @Query("SELECT COUNT(*) FROM reports WHERE syncState = 'PENDING_SYNC'")
     LiveData<Integer> getPendingCountLive();
 
+    @Query("UPDATE reports SET address = :address WHERE id = :id")
+    void updateAddress(long id, String address);
+
     @Query("UPDATE reports SET syncState = 'SYNCED', cloudId = :cloudId, photoUrl = :photoUrl WHERE id = :id")
     void markSynced(long id, String cloudId, String photoUrl);
 }

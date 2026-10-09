@@ -19,6 +19,8 @@ import com.example.civicfix.databinding.ActivityReportBinding;
 import com.example.civicfix.db.AppDatabase;
 import com.example.civicfix.model.Report;
 import com.example.civicfix.network.GeocodingClient;
+import com.example.civicfix.sync.SyncScheduler;
+import com.example.civicfix.util.NetworkUtil;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
@@ -215,8 +217,12 @@ public class ReportActivity extends AppCompatActivity {
         binding.btnSubmit.setEnabled(false);
         AppDatabase.dbExecutor.execute(() -> {
             AppDatabase.getInstance(this).reportDao().insert(r);
+            SyncScheduler.enqueue(getApplicationContext()); // uploads now if online, later if not
+            boolean online = NetworkUtil.isOnline(this);
             runOnUiThread(() -> {
-                Toast.makeText(this, "Report saved. It will upload when you're online.",
+                Toast.makeText(this,
+                        online ? "Report saved. Uploading now..."
+                                : "You're offline. Report saved and will upload automatically when you're back online.",
                         Toast.LENGTH_LONG).show();
                 finish();
             });
