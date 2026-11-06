@@ -19,6 +19,7 @@ import com.example.civicfix.model.FeedItem;
 import com.example.civicfix.model.Report;
 import com.example.civicfix.network.ConnectivityReceiver;
 import com.example.civicfix.ui.ReportActivity;
+import com.example.civicfix.ui.IssueDetailActivity;
 import com.example.civicfix.util.NetworkUtil;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -53,6 +54,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         adapter = new ReportAdapter(this::toggleVote);
+        adapter.setOnOpenListener(item -> {
+            Intent intent = new Intent(this, IssueDetailActivity.class);
+            intent.putExtra(IssueDetailActivity.EXTRA_ID, item.id);
+            startActivity(intent);
+        });
         binding.rvFeed.setLayoutManager(new LinearLayoutManager(this));
         binding.rvFeed.setAdapter(adapter);
 

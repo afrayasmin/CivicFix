@@ -17,6 +17,7 @@ import com.example.civicfix.model.FeedItem;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
 
@@ -43,11 +44,17 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
             };
 
     private final OnUpvoteClick upvoteListener;
+    private Consumer<FeedItem> openListener;
     private String currentUid;
 
     public ReportAdapter(OnUpvoteClick upvoteListener) {
         super(DIFF);
         this.upvoteListener = upvoteListener;
+    }
+
+    /** Called when a card is tapped (opens the detail screen). */
+    public void setOnOpenListener(Consumer<FeedItem> listener) {
+        this.openListener = listener;
     }
 
     /** Called once the anonymous sign-in finishes, so voted buttons light up. */
@@ -68,7 +75,7 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
 
     @Override
     public void onBindViewHolder(@NonNull VH holder, int position) {
-        holder.bind(getItem(position), currentUid, upvoteListener);
+        holder.bind(getItem(position), currentUid, upvoteListener, openListener);
     }
 
     static class VH extends RecyclerView.ViewHolder {
@@ -79,7 +86,7 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
             this.b = binding;
         }
 
-        void bind(FeedItem f, String uid, OnUpvoteClick listener) {
+        void bind(FeedItem f, String uid, OnUpvoteClick upvote, Consumer<FeedItem> open) {
             b.tvDepartment.setText(f.category);
             b.tvStatus.setText(statusLabel(f.status));
             b.tvDescription.setText(f.description);
@@ -97,11 +104,15 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
                     + " · " + f.upvotes);
             b.btnUpvote.setSelected(voted);
             b.btnUpvote.setTextColor(voted ? Color.WHITE : 0xFF0D47A1);
-            b.btnUpvote.setOnClickListener(v -> listener.onUpvote(f));
+            b.btnUpvote.setOnClickListener(v -> upvote.onUpvote(f));
 
             b.tvUrgent.setVisibility(f.isHighUrgency() ? View.VISIBLE : View.GONE);
 
             Glide.with(b.ivPhoto).load(f.photoUrl).into(b.ivPhoto);
+
+            b.getRoot().setOnClickListener(v -> {
+                if (open != null) open.accept(f);
+            });
         }
 
         private static String statusLabel(String status) {

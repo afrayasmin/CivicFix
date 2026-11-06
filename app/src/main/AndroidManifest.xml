@@ -45,6 +45,11 @@
             android:exported="false"
             android:label="Report hazard" />
 
+        <activity
+            android:name=".ui.IssueDetailActivity"
+            android:exported="false"
+            android:label="Report details" />
+
     </application>
 
 </manifest>
