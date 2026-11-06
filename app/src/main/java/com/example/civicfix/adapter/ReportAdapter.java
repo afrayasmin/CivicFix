@@ -1,5 +1,6 @@
 package com.example.civicfix.adapter;
 
+import android.graphics.Color;
 import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -19,6 +20,10 @@ import java.util.Objects;
 
 public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
 
+    public interface OnUpvoteClick {
+        void onUpvote(FeedItem item);
+    }
+
     private static final DiffUtil.ItemCallback<FeedItem> DIFF =
             new DiffUtil.ItemCallback<FeedItem>() {
                 @Override
@@ -29,6 +34,7 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
                 @Override
                 public boolean areContentsTheSame(@NonNull FeedItem a, @NonNull FeedItem b) {
                     return a.upvotes == b.upvotes
+                            && a.voters.equals(b.voters)
                             && Objects.equals(a.status, b.status)
                             && Objects.equals(a.photoUrl, b.photoUrl)
                             && Objects.equals(a.address, b.address)
@@ -36,8 +42,20 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
                 }
             };
 
-    public ReportAdapter() {
+    private final OnUpvoteClick upvoteListener;
+    private String currentUid;
+
+    public ReportAdapter(OnUpvoteClick upvoteListener) {
         super(DIFF);
+        this.upvoteListener = upvoteListener;
+    }
+
+    /** Called once the anonymous sign-in finishes, so voted buttons light up. */
+    public void setCurrentUid(String uid) {
+        if (!Objects.equals(uid, currentUid)) {
+            currentUid = uid;
+            notifyDataSetChanged();
+        }
     }
 
     @NonNull
@@ -50,7 +68,7 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
 
     @Override
     public void onBindViewHolder(@NonNull VH holder, int position) {
-        holder.bind(getItem(position));
+        holder.bind(getItem(position), currentUid, upvoteListener);
     }
 
     static class VH extends RecyclerView.ViewHolder {
@@ -61,7 +79,7 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
             this.b = binding;
         }
 
-        void bind(FeedItem f) {
+        void bind(FeedItem f, String uid, OnUpvoteClick listener) {
             b.tvDepartment.setText(f.category);
             b.tvStatus.setText(statusLabel(f.status));
             b.tvDescription.setText(f.description);
@@ -73,7 +91,13 @@ public class ReportAdapter extends ListAdapter<FeedItem, ReportAdapter.VH> {
 
             b.tvTime.setText(DateUtils.getRelativeTimeSpanString(
                     f.createdAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS));
-            b.tvUpvotes.setText("👍 " + f.upvotes + " noticed this");
+
+            boolean voted = f.hasVoted(uid);
+            b.btnUpvote.setText((voted ? "👍 You noticed this" : "👍 I noticed this too")
+                    + " · " + f.upvotes);
+            b.btnUpvote.setSelected(voted);
+            b.btnUpvote.setTextColor(voted ? Color.WHITE : 0xFF0D47A1);
+            b.btnUpvote.setOnClickListener(v -> listener.onUpvote(f));
 
             b.tvUrgent.setVisibility(f.isHighUrgency() ? View.VISIBLE : View.GONE);
 

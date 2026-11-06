@@ -106,7 +106,8 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <TextView
@@ -118,10 +119,19 @@
                     android:textSize="12sp" />
 
                 <TextView
-                    android:id="@+id/tvUpvotes"
+                    android:id="@+id/btnUpvote"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#212121"
+                    android:background="@drawable/bg_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:minHeight="40dp"
+                    android:gravity="center"
+                    android:paddingStart="14dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="8dp"
+                    android:textColor="#0D47A1"
                     android:textSize="13sp" />
             </LinearLayout>
         </LinearLayout>

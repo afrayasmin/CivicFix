@@ -19,13 +19,19 @@ import com.example.civicfix.model.FeedItem;
 import com.example.civicfix.model.Report;
 import com.example.civicfix.network.ConnectivityReceiver;
 import com.example.civicfix.ui.ReportActivity;
+import com.example.civicfix.util.NetworkUtil;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class MainActivity extends AppCompatActivity {
@@ -46,7 +52,7 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        adapter = new ReportAdapter();
+        adapter = new ReportAdapter(this::toggleVote);
         binding.rvFeed.setLayoutManager(new LinearLayoutManager(this));
         binding.rvFeed.setAdapter(adapter);
 
@@ -93,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
+        ensureSignedIn();
         startFeedListener();
     }
 
@@ -103,6 +110,70 @@ public class MainActivity extends AppCompatActivity {
             feedListener.remove();
             feedListener = null;
         }
+    }
+
+    // ---------------- Identity (anonymous sign-in) ----------------
+
+    private void ensureSignedIn() {
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        FirebaseUser user = auth.getCurrentUser();
+        if (user != null) {
+            adapter.setCurrentUid(user.getUid());
+            return;
+        }
+        auth.signInAnonymously()
+                .addOnSuccessListener(result ->
+                        adapter.setCurrentUid(result.getUser().getUid()))
+                .addOnFailureListener(e ->
+                        Log.e(TAG, "Anonymous sign-in failed", e));
+    }
+
+    // ---------------- Upvoting ----------------
+
+    private void toggleVote(FeedItem item) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, "Signing you in. Try again in a moment.",
+                    Toast.LENGTH_SHORT).show();
+            ensureSignedIn();
+            return;
+        }
+        if (!NetworkUtil.isOnline(this)) {
+            Toast.makeText(this, "Connect to the internet to upvote.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String uid = user.getUid();
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        DocumentReference ref = db.collection("reports").document(item.id);
+
+        // A transaction reads the current voters first, so two people voting at the
+        // same moment can never overwrite each other, and one person never counts twice.
+        db.runTransaction(tx -> {
+            DocumentSnapshot snap = tx.get(ref);
+            List<String> voters = new ArrayList<>();
+            Object raw = snap.get("voters");
+            if (raw instanceof List) {
+                for (Object o : (List<?>) raw) voters.add(String.valueOf(o));
+            }
+
+            if (voters.contains(uid)) {
+                voters.remove(uid);   // tapping again removes your vote
+            } else {
+                voters.add(uid);
+            }
+
+            Map<String, Object> update = new HashMap<>();
+            update.put("voters", voters);
+            update.put("upvotes", voters.size());
+            tx.update(ref, update);
+            return null;
+        }).addOnFailureListener(e -> {
+            Log.e(TAG, "Vote failed", e);
+            Toast.makeText(this, "Vote failed: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
+        });
     }
 
     // ---------------- Live feed ----------------
