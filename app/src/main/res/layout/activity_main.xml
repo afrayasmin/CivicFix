@@ -15,33 +15,44 @@
         android:textColor="#FFFFFF"
         android:visibility="gone" />
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/tvPending"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FFF3E0"
+        android:gravity="center"
+        android:padding="8dp"
+        android:textColor="#E65100"
+        android:visibility="gone" />
+
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:layout_weight="1">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="CivicFix"
-            android:textSize="28sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btnNewReport"
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvFeed"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Report a hazard" />
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp" />
 
         <TextView
-            android:id="@+id/tvPending"
+            android:id="@+id/tvEmpty"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="0 reports waiting to upload" />
-    </LinearLayout>
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="32dp"
+            android:text="No reports yet.\nBe the first to report a hazard."
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <Button
+        android:id="@+id/btnNewReport"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:text="Report a hazard" />
 </LinearLayout>
