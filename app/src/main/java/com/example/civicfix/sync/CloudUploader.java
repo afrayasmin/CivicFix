@@ -100,6 +100,11 @@ public class CloudUploader {
         return out.toByteArray();
     }
 
+    /** Compresses a local photo and uploads it to Cloudinary. Returns the photo URL. */
+    public static String uploadPhoto(String path) throws Exception {
+        return uploadToCloudinary(compressPhoto(path));
+    }
+
     // ---------- Cloudinary unsigned upload ----------
 
     private static String uploadToCloudinary(byte[] jpeg) throws Exception {

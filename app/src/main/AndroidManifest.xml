@@ -50,6 +50,16 @@
             android:exported="false"
             android:label="Report details" />
 
+        <activity
+            android:name=".ui.OfficerLoginActivity"
+            android:exported="false"
+            android:label="Officer login" />
+
+        <activity
+            android:name=".ui.OfficerQueueActivity"
+            android:exported="false"
+            android:label="Officer queue" />
+
     </application>
 
 </manifest>

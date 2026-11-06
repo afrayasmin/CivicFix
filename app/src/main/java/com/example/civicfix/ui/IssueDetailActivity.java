@@ -1,7 +1,9 @@
 package com.example.civicfix.ui;
 
+import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -11,18 +13,35 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
 import com.example.civicfix.databinding.ActivityIssueDetailBinding;
+import com.example.civicfix.db.AppDatabase;
 import com.example.civicfix.model.FeedItem;
+import com.example.civicfix.sync.CloudUploader;
+import com.example.civicfix.util.NetworkUtil;
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 
+import java.io.File;
 import java.text.DateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class IssueDetailActivity extends AppCompatActivity {
 
@@ -32,6 +51,29 @@ public class IssueDetailActivity extends AppCompatActivity {
     private ActivityIssueDetailBinding b;
     private ListenerRegistration registration;
     private FeedItem current;
+
+    private String officerDept = null;   // set when the signed-in user is an officer
+    private File proofFile;
+    private boolean busy = false;
+
+    // ---------------- Proof-of-fix camera ----------------
+
+    private final ActivityResultLauncher<Uri> takeProofLauncher =
+            registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
+                if (success && proofFile != null) {
+                    uploadProofAndResolve(proofFile);
+                }
+            });
+
+    private final ActivityResultLauncher<String> cameraPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted) {
+                    launchProofCamera();
+                } else {
+                    Toast.makeText(this, "Camera permission is needed for the proof photo",
+                            Toast.LENGTH_LONG).show();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +87,8 @@ public class IssueDetailActivity extends AppCompatActivity {
         }
 
         b.btnNavigate.setOnClickListener(v -> navigate());
+        b.btnInspect.setOnClickListener(v -> updateStatus("Under Inspection"));
+        b.btnResolve.setOnClickListener(v -> startResolve());
     }
 
     @Override
@@ -62,22 +106,22 @@ public class IssueDetailActivity extends AppCompatActivity {
             return;
         }
 
+        loadOfficerRole();
+
         // Live updates: the status tracker changes as soon as an officer updates it
-        registration = FirebaseFirestore.getInstance()
-                .collection("reports").document(id)
-                .addSnapshotListener((doc, error) -> {
-                    if (error != null) {
-                        Log.e(TAG, "Detail listener failed", error);
-                        return;
-                    }
-                    if (doc == null || !doc.exists()) {
-                        Toast.makeText(this, "This report is no longer available",
-                                Toast.LENGTH_SHORT).show();
-                        finish();
-                        return;
-                    }
-                    bind(doc);
-                });
+        registration = reportRef(id).addSnapshotListener((doc, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Detail listener failed", error);
+                return;
+            }
+            if (doc == null || !doc.exists()) {
+                Toast.makeText(this, "This report is no longer available",
+                        Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+            bind(doc);
+        });
     }
 
     @Override
@@ -88,6 +132,46 @@ public class IssueDetailActivity extends AppCompatActivity {
             registration = null;
         }
     }
+
+    private DocumentReference reportRef(String id) {
+        return FirebaseFirestore.getInstance().collection("reports").document(id);
+    }
+
+    // ---------------- Officer role ----------------
+
+    private void loadOfficerRole() {
+        officerDept = null;
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || user.isAnonymous()) return;
+
+        FirebaseFirestore.getInstance().collection("officers").document(user.getUid()).get()
+                .addOnSuccessListener(doc -> {
+                    officerDept = doc.exists() ? doc.getString("department") : null;
+                    refreshOfficerUi();
+                });
+    }
+
+    private void refreshOfficerUi() {
+        boolean show = current != null
+                && officerDept != null
+                && officerDept.equals(current.category)
+                && !"Resolved".equals(current.status);
+
+        b.officerSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (!show) return;
+
+        b.btnInspect.setVisibility("Submitted".equals(current.status) ? View.VISIBLE : View.GONE);
+        b.btnInspect.setEnabled(!busy);
+        b.btnResolve.setEnabled(!busy);
+        b.tvOfficerBusy.setVisibility(busy ? View.VISIBLE : View.GONE);
+    }
+
+    private void setBusy(boolean value) {
+        busy = value;
+        refreshOfficerUi();
+    }
+
+    // ---------------- Screen content ----------------
 
     private void bind(DocumentSnapshot doc) {
         FeedItem f = FeedItem.from(doc);
@@ -112,11 +196,9 @@ public class IssueDetailActivity extends AppCompatActivity {
             b.tvLandmark.setVisibility(View.GONE);
         }
 
-        String when = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                .format(new Date(f.createdAt));
         b.tvMeta.setText("Reported " + DateUtils.getRelativeTimeSpanString(
                 f.createdAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
-                + " (" + when + ")  ·  👍 " + f.upvotes + " noticed this");
+                + " (" + formatTime(f.createdAt) + ")  ·  👍 " + f.upvotes + " noticed this");
 
         // Status tracker
         int step = 0;
@@ -129,7 +211,7 @@ public class IssueDetailActivity extends AppCompatActivity {
             steps[i].setTextColor(reached ? Color.WHITE : 0xFF0D47A1);
         }
 
-        // Before and after photos, shown once an officer attaches proof of the fix
+        // Before and after photos
         String after = doc.getString("afterPhotoUrl");
         if (after != null && !after.isEmpty()) {
             b.proofSection.setVisibility(View.VISIBLE);
@@ -138,6 +220,128 @@ public class IssueDetailActivity extends AppCompatActivity {
         } else {
             b.proofSection.setVisibility(View.GONE);
         }
+
+        // Audit trail written by officers
+        StringBuilder log = new StringBuilder();
+        Object history = doc.get("statusHistory");
+        if (history instanceof List) {
+            for (Object entry : (List<?>) history) {
+                if (!(entry instanceof Map)) continue;
+                Map<?, ?> m = (Map<?, ?>) entry;
+                Object at = m.get("at");
+                long time = at instanceof Number ? ((Number) at).longValue() : 0;
+                log.append("• ").append(m.get("status"))
+                        .append(" · ").append(formatTime(time))
+                        .append(" · ").append(m.get("by")).append("\n");
+            }
+        }
+        if (log.length() > 0) {
+            b.tvHistory.setText("Activity log\n" + log.toString().trim());
+            b.tvHistory.setVisibility(View.VISIBLE);
+        } else {
+            b.tvHistory.setVisibility(View.GONE);
+        }
+
+        refreshOfficerUi();
+    }
+
+    private String formatTime(long millis) {
+        return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                .format(new Date(millis));
+    }
+
+    // ---------------- Officer actions ----------------
+
+    private Map<String, Object> historyEntry(String status) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("status", status);
+        entry.put("at", System.currentTimeMillis());
+        entry.put("by", user != null && user.getEmail() != null ? user.getEmail() : "officer");
+        return entry;
+    }
+
+    private void updateStatus(String newStatus) {
+        if (current == null) return;
+        if (!NetworkUtil.isOnline(this)) {
+            Toast.makeText(this, "Connect to the internet to update a report.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Map<String, Object> update = new HashMap<>();
+        update.put("status", newStatus);
+        update.put("statusHistory", FieldValue.arrayUnion(historyEntry(newStatus)));
+
+        setBusy(true);
+        reportRef(current.id).update(update)
+                .addOnSuccessListener(v -> {
+                    setBusy(false);
+                    Toast.makeText(this, "Status updated", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    setBusy(false);
+                    Log.e(TAG, "Status update failed", e);
+                    Toast.makeText(this, "Update failed: " + e.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                });
+    }
+
+    private void startResolve() {
+        if (current == null) return;
+        if (!NetworkUtil.isOnline(this)) {
+            Toast.makeText(this, "Connect to the internet to resolve a report.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED) {
+            launchProofCamera();
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+        }
+    }
+
+    private void launchProofCamera() {
+        File dir = new File(getFilesDir(), "photos");
+        if (!dir.exists()) dir.mkdirs();
+        proofFile = new File(dir, "PROOF_" + System.currentTimeMillis() + ".jpg");
+
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", proofFile);
+        takeProofLauncher.launch(uri);
+    }
+
+    private void uploadProofAndResolve(File photo) {
+        if (current == null) return;
+        final String reportId = current.id;
+
+        setBusy(true);
+        AppDatabase.dbExecutor.execute(() -> {
+            try {
+                String url = CloudUploader.uploadPhoto(photo.getAbsolutePath());
+
+                Map<String, Object> update = new HashMap<>();
+                update.put("status", "Resolved");
+                update.put("afterPhotoUrl", url);
+                update.put("resolvedAt", System.currentTimeMillis());
+                update.put("statusHistory", FieldValue.arrayUnion(historyEntry("Resolved")));
+
+                Tasks.await(reportRef(reportId).update(update), 30, TimeUnit.SECONDS);
+
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    Toast.makeText(this, "Marked as resolved with proof photo",
+                            Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Resolve failed", e);
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    Toast.makeText(this, "Could not upload the proof photo: " + e.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+        });
     }
 
     // ---------------- Navigation (implicit intents) ----------------

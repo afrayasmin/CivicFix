@@ -8,6 +8,9 @@ import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.view.Menu;
+import android.view.MenuItem;
+import com.example.civicfix.ui.OfficerLoginActivity;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -100,6 +103,21 @@ public class MainActivity extends AppCompatActivity {
         ConnectivityReceiver.online.observe(this, isOnline ->
                 binding.tvOffline.setVisibility(
                         Boolean.TRUE.equals(isOnline) ? View.GONE : View.VISIBLE));
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add(0, 1, 0, "Officer login");
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == 1) {
+            startActivity(new Intent(this, OfficerLoginActivity.class));
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override
