@@ -10,7 +10,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Menu;
 import android.view.MenuItem;
-import com.example.civicfix.ui.OfficerLoginActivity;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -24,6 +23,8 @@ import com.example.civicfix.network.ConnectivityReceiver;
 import com.example.civicfix.ui.ReportActivity;
 import com.example.civicfix.ui.IssueDetailActivity;
 import com.example.civicfix.util.NetworkUtil;
+import com.example.civicfix.ui.OfficerLoginActivity;
+import com.example.civicfix.ui.EmergencyActivity;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
@@ -107,7 +108,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        menu.add(0, 1, 0, "Officer login");
+        MenuItem sos = menu.add(0, 2, 0, "🚨 SOS");
+        sos.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+        menu.add(0, 1, 1, "Officer login");
         return true;
     }
 
@@ -115,6 +118,10 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == 1) {
             startActivity(new Intent(this, OfficerLoginActivity.class));
+            return true;
+        }
+        if (item.getItemId() == 2) {
+            startActivity(new Intent(this, EmergencyActivity.class));
             return true;
         }
         return super.onOptionsItemSelected(item);

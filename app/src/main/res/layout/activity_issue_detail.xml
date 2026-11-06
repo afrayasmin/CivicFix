@@ -280,6 +280,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
                 android:text="Navigate to this hazard" />
+
+            <Button
+                android:id="@+id/btnEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="✉️ Email the municipal council" />
+
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

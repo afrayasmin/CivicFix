@@ -25,6 +25,7 @@ import com.example.civicfix.db.AppDatabase;
 import com.example.civicfix.model.FeedItem;
 import com.example.civicfix.sync.CloudUploader;
 import com.example.civicfix.util.NetworkUtil;
+import com.example.civicfix.util.GrievanceMailer;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -87,6 +88,9 @@ public class IssueDetailActivity extends AppCompatActivity {
         }
 
         b.btnNavigate.setOnClickListener(v -> navigate());
+        b.btnEmail.setOnClickListener(v -> {
+            if (current != null) GrievanceMailer.send(this, current);
+        });
         b.btnInspect.setOnClickListener(v -> updateStatus("Under Inspection"));
         b.btnResolve.setOnClickListener(v -> startResolve());
     }
