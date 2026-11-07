@@ -9,7 +9,7 @@ import java.util.List;
 public class FeedItem {
 
     // Reports with this many upvotes (or more) become High Urgency
-    public static final int HIGH_URGENCY_VOTES = 2;
+    public static final int HIGH_URGENCY_VOTES = 5;
 
     public String id;
     public String category;

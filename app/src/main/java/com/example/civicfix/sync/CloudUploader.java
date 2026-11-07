@@ -8,6 +8,7 @@ import androidx.exifinterface.media.ExifInterface;
 
 import com.example.civicfix.model.Report;
 import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import org.json.JSONObject;
@@ -34,6 +35,12 @@ public class CloudUploader {
      * Returns {cloudId, photoUrl}.
      */
     public static String[] upload(Context context, Report r) throws Exception {
+        // The security rules require a signed-in user (anonymous is enough)
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() == null) {
+            Tasks.await(auth.signInAnonymously(), 20, TimeUnit.SECONDS);
+        }
+
         // 1. Photo -> Cloudinary (optional)
         String photoUrl = null;
         if (r.localPhotoPath != null && !r.localPhotoPath.isEmpty()) {

@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOfficer() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/officers/$(request.auth.uid));
+    }
+
+    function officerDepartment() {
+      return get(/databases/$(database)/documents/officers/$(request.auth.uid)).data.department;
+    }
+
+    // Officer profiles are created by hand in the console. The app can only read its own.
+    match /officers/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /reports/{reportId} {
+
+      // Citizen voting: only "voters" and "upvotes" change, and only by this user's own id
+      function votingOnly() {
+        let before = resource.data.get('voters', []);
+        let after = request.resource.data.voters;
+        let added = after.toSet().difference(before.toSet());
+        let removed = before.toSet().difference(after.toSet());
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['voters', 'upvotes'])
+          && request.resource.data.upvotes == after.size()
+          && after.toSet().size() == after.size()
+          && ((added.hasOnly([request.auth.uid]) && added.size() == 1 && removed.size() == 0)
+              || (removed.hasOnly([request.auth.uid]) && removed.size() == 1 && added.size() == 0));
+      }
+
+      // Officers: only their own department, only the status-related fields
+      function officerUpdate() {
+        return isOfficer()
+          && officerDepartment() == resource.data.category
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'afterPhotoUrl', 'resolvedAt', 'statusHistory'])
+          && request.resource.data.status in ['Submitted', 'Under Inspection', 'Resolved'];
+      }
+
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+             'category', 'severity', 'description', 'landmark', 'latitude',
+             'longitude', 'address', 'photoUrl', 'status', 'upvotes', 'createdAt'])
+        && request.resource.data.category in [
+             'Roads & Transport', 'Power & Electricity', 'Water & Sewage', 'Sanitation & Waste']
+        && request.resource.data.severity in ['Low', 'Medium', 'Critical']
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 1000
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.photoUrl is string
+        && request.resource.data.status == 'Submitted'
+        && request.resource.data.upvotes == 0;
+
+      allow update: if signedIn() && (votingOnly() || officerUpdate());
+
+      allow delete: if false;
+    }
+  }
+}
