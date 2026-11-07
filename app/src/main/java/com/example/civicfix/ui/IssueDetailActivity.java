@@ -206,16 +206,11 @@ public class IssueDetailActivity extends AppCompatActivity {
                 f.createdAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
                 + " (" + formatTime(f.createdAt) + ")  ·  👍 " + f.upvotes + " noticed this");
 
-        // Status tracker
+        // Status tracker (custom view)
         int step = 0;
         if ("Under Inspection".equals(f.status)) step = 1;
         else if ("Resolved".equals(f.status)) step = 2;
-        TextView[] steps = {b.tvStep1, b.tvStep2, b.tvStep3};
-        for (int i = 0; i < steps.length; i++) {
-            boolean reached = i <= step;
-            steps[i].setSelected(reached);
-            steps[i].setTextColor(reached ? Color.WHITE : 0xFF0D47A1);
-        }
+        b.statusTracker.setStep(step);
 
         // Before and after photos
         String after = doc.getString("afterPhotoUrl");
