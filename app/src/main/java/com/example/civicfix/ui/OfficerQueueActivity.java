@@ -37,6 +37,18 @@ public class OfficerQueueActivity extends AppCompatActivity {
         return Long.compare(a.createdAt, b.createdAt);
     };
 
+    /** Used by "Open" and "All": unresolved reports first, resolved ones at the bottom. */
+    private static final Comparator<FeedItem> OPEN_FIRST = (a, b) -> {
+        boolean ra = "Resolved".equals(a.status);
+        boolean rb = "Resolved".equals(b.status);
+        if (ra != rb) return ra ? 1 : -1;
+        return QUEUE_ORDER.compare(a, b);
+    };
+
+    /** Used by "Resolved": most recent first. */
+    private static final Comparator<FeedItem> NEWEST_FIRST =
+            (a, b) -> Long.compare(b.createdAt, a.createdAt);
+
     private static int severityRank(String severity) {
         if ("Critical".equals(severity)) return 0;
         if ("Low".equals(severity)) return 2;
@@ -71,7 +83,7 @@ public class OfficerQueueActivity extends AppCompatActivity {
             FirebaseAuth.getInstance().signOut();
             finish();
         });
-        b.cbShowResolved.setOnCheckedChangeListener((v, checked) -> applyFilter());
+        b.rgView.setOnCheckedChangeListener((group, checkedId) -> applyFilter());
 
         loadOfficer();
     }
@@ -142,24 +154,42 @@ public class OfficerQueueActivity extends AppCompatActivity {
     }
 
     private void applyFilter() {
-        boolean showResolved = b.cbShowResolved.isChecked();
+        int checked = b.rgView.getCheckedRadioButtonId();
+        boolean wantOpen = checked == b.rbOpen.getId();
+        boolean wantResolved = checked == b.rbResolved.getId();
+
         List<FeedItem> shown = new ArrayList<>();
         int open = 0;
         int urgent = 0;
+        int resolvedCount = 0;
 
         for (FeedItem f : allItems) {
             boolean resolved = "Resolved".equals(f.status);
-            if (!resolved) {
+            if (resolved) {
+                resolvedCount++;
+            } else {
                 open++;
                 if (f.isHighUrgency()) urgent++;
             }
-            if (resolved && !showResolved) continue;
-            shown.add(f);
+
+            if (wantOpen && resolved) continue;      // Open: unresolved only
+            if (wantResolved && !resolved) continue; // Resolved: resolved only
+            shown.add(f);                            // All: everything
         }
-        Collections.sort(shown, QUEUE_ORDER);
+
+        Collections.sort(shown, wantResolved ? NEWEST_FIRST : OPEN_FIRST);
         adapter.submitList(shown);
 
-        b.tvSummary.setText(open + " open · " + urgent + " high urgency");
-        b.tvEmpty.setVisibility(shown.isEmpty() ? View.VISIBLE : View.GONE);
+        b.tvSummary.setText(open + " open · " + urgent + " high urgency · "
+                + resolvedCount + " resolved");
+
+        if (shown.isEmpty()) {
+            b.tvEmpty.setText(wantResolved ? "No resolved reports yet."
+                    : wantOpen ? "No open reports for your department."
+                    : "No reports for your department.");
+            b.tvEmpty.setVisibility(View.VISIBLE);
+        } else {
+            b.tvEmpty.setVisibility(View.GONE);
+        }
     }
 }

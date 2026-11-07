@@ -35,13 +35,36 @@
         android:padding="10dp"
         android:textColor="#0D47A1" />
 
-    <CheckBox
-        android:id="@+id/cbShowResolved"
-        android:layout_width="wrap_content"
+    <RadioGroup
+        android:id="@+id/rgView"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:minHeight="48dp"
-        android:text="Show resolved reports" />
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <RadioButton
+            android:id="@+id/rbOpen"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:minHeight="48dp"
+            android:text="Open" />
+
+        <RadioButton
+            android:id="@+id/rbResolved"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Resolved" />
+
+        <RadioButton
+            android:id="@+id/rbAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="All" />
+    </RadioGroup>
 
     <FrameLayout
         android:layout_width="match_parent"
