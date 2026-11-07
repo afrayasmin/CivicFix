@@ -32,6 +32,7 @@ import com.example.civicfix.ui.IssueDetailActivity;
 import com.example.civicfix.ui.OfficerLoginActivity;
 import com.example.civicfix.ui.ReportActivity;
 import com.example.civicfix.util.NetworkUtil;
+import com.example.civicfix.ui.MyReportsActivity;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
@@ -159,7 +160,8 @@ public class MainActivity extends AppCompatActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuItem sos = menu.add(0, 2, 0, "🚨 SOS");
         sos.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-        menu.add(0, 1, 1, "Officer login");
+        menu.add(0, 3, 1, "My reports");
+        menu.add(0, 1, 2, "Officer login");
         return true;
     }
 
@@ -171,6 +173,10 @@ public class MainActivity extends AppCompatActivity {
         }
         if (item.getItemId() == 2) {
             startActivity(new Intent(this, EmergencyActivity.class));
+            return true;
+        }
+        if (item.getItemId() == 3) {
+            startActivity(new Intent(this, MyReportsActivity.class));
             return true;
         }
         return super.onOptionsItemSelected(item);

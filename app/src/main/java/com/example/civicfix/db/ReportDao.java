@@ -29,4 +29,8 @@ public interface ReportDao {
 
     @Query("UPDATE reports SET syncState = 'SYNCED', cloudId = :cloudId, photoUrl = :photoUrl WHERE id = :id")
     void markSynced(long id, String cloudId, String photoUrl);
+
+    // Only reports that have not been uploaded can be deleted. Returns the rows removed.
+    @Query("DELETE FROM reports WHERE id = :id AND syncState = 'PENDING_SYNC'")
+    int deletePending(long id);
 }

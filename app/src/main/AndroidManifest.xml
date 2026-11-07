@@ -75,6 +75,11 @@
             android:exported="false"
             android:label="Emergency" />
 
+        <activity
+            android:name=".ui.MyReportsActivity"
+            android:exported="false"
+            android:label="My reports" />
+
     </application>
 
 </manifest>
