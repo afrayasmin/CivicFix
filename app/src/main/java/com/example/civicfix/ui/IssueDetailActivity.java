@@ -4,17 +4,16 @@ import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.format.DateUtils;
 import android.util.Log;
 import android.view.View;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -24,20 +23,24 @@ import com.example.civicfix.databinding.ActivityIssueDetailBinding;
 import com.example.civicfix.db.AppDatabase;
 import com.example.civicfix.model.FeedItem;
 import com.example.civicfix.sync.CloudUploader;
-import com.example.civicfix.util.NetworkUtil;
 import com.example.civicfix.util.GrievanceMailer;
+import com.example.civicfix.util.NetworkUtil;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ServerValue;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -59,7 +62,7 @@ public class IssueDetailActivity extends AppCompatActivity {
     private File proofFile;
     private boolean busy = false;
 
-    // ---------------- Proof-of-fix camera ----------------
+    // ---------------- Proof-of-fix: camera and gallery ----------------
 
     private final ActivityResultLauncher<Uri> takeProofLauncher =
             registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
@@ -73,9 +76,16 @@ public class IssueDetailActivity extends AppCompatActivity {
                 if (granted) {
                     launchProofCamera();
                 } else {
-                    Toast.makeText(this, "Camera permission is needed for the proof photo",
+                    Toast.makeText(this, "Camera permission is needed to take the proof photo. "
+                                    + "You can choose a photo from the gallery instead.",
                             Toast.LENGTH_LONG).show();
                 }
+            });
+
+    // Picks an existing image from the device's shared media
+    private final ActivityResultLauncher<String> proofGalleryLauncher =
+            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+                if (uri != null) importProofFromGallery(uri);
             });
 
     @Override
@@ -288,6 +298,7 @@ public class IssueDetailActivity extends AppCompatActivity {
                 });
     }
 
+    /** Asks the officer how to provide the proof photo: camera or gallery. */
     private void startResolve() {
         if (current == null) return;
         if (!NetworkUtil.isOnline(this)) {
@@ -295,6 +306,30 @@ public class IssueDetailActivity extends AppCompatActivity {
                     Toast.LENGTH_SHORT).show();
             return;
         }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Proof of the repair")
+                .setItems(new String[]{"Take a photo", "Choose from gallery"},
+                        (dialog, which) -> {
+                            if (which == 0) {
+                                openProofCamera();
+                            } else {
+                                proofGalleryLauncher.launch("image/*");
+                            }
+                        })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private File photosDir() {
+        File dir = new File(getFilesDir(), "photos");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+
+    // --- Camera ---
+
+    private void openProofCamera() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED) {
             launchProofCamera();
@@ -304,13 +339,38 @@ public class IssueDetailActivity extends AppCompatActivity {
     }
 
     private void launchProofCamera() {
-        File dir = new File(getFilesDir(), "photos");
-        if (!dir.exists()) dir.mkdirs();
-        proofFile = new File(dir, "PROOF_" + System.currentTimeMillis() + ".jpg");
-
+        proofFile = new File(photosDir(), "PROOF_" + System.currentTimeMillis() + ".jpg");
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", proofFile);
         takeProofLauncher.launch(uri);
     }
+
+    // --- Gallery (ContentResolver) ---
+
+    private void importProofFromGallery(Uri uri) {
+        final File target = new File(photosDir(), "PROOF_" + System.currentTimeMillis() + ".jpg");
+
+        setBusy(true);
+        AppDatabase.dbExecutor.execute(() -> {
+            try (InputStream in = getContentResolver().openInputStream(uri);
+                 OutputStream out = new FileOutputStream(target)) {
+                if (in == null) throw new IOException("Cannot open the selected image");
+                byte[] buffer = new byte[8192];
+                int n;
+                while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+            } catch (Exception e) {
+                Log.e(TAG, "Could not read the proof photo", e);
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    Toast.makeText(this, "Could not read the selected image",
+                            Toast.LENGTH_LONG).show();
+                });
+                return;
+            }
+            runOnUiThread(() -> uploadProofAndResolve(target));
+        });
+    }
+
+    // --- Upload and resolve (same for camera and gallery) ---
 
     private void uploadProofAndResolve(File photo) {
         if (current == null) return;
@@ -328,6 +388,8 @@ public class IssueDetailActivity extends AppCompatActivity {
                 update.put("statusHistory", FieldValue.arrayUnion(historyEntry("Resolved")));
 
                 Tasks.await(reportRef(reportId).update(update), 30, TimeUnit.SECONDS);
+
+                // Live community counter (Realtime Database). A failure here must not fail the update.
                 try {
                     Tasks.await(FirebaseDatabase.getInstance().getReference("stats/resolved")
                             .setValue(ServerValue.increment(1)), 10, TimeUnit.SECONDS);

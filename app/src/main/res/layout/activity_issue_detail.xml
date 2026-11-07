@@ -226,7 +226,7 @@
                     android:id="@+id/btnResolve"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Mark as Resolved (take proof photo)" />
+                    android:text="Mark as Resolved (add proof photo)"/>
 
                 <TextView
                     android:id="@+id/tvOfficerBusy"
