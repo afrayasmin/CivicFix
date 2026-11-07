@@ -3,8 +3,12 @@ package com.example.civicfix.ui;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
+import android.text.format.Formatter;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Toast;
 
@@ -27,6 +31,10 @@ import com.google.android.gms.location.Priority;
 import com.google.android.gms.tasks.CancellationTokenSource;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Locale;
 
 public class ReportActivity extends AppCompatActivity {
@@ -34,7 +42,7 @@ public class ReportActivity extends AppCompatActivity {
     private ActivityReportBinding binding;
     private FusedLocationProviderClient locationClient;
 
-    private File photoFile;     // the confirmed photo
+    private File photoFile;     // the confirmed photo (camera or gallery)
     private File pendingFile;   // the photo currently being taken
 
     private double latitude;
@@ -57,6 +65,8 @@ public class ReportActivity extends AppCompatActivity {
                     photoFile = pendingFile;
                     Glide.with(this).load(photoFile).into(binding.ivPhoto);
                     binding.btnPhoto.setText("Retake photo");
+                    binding.tvPhotoInfo.setText("Taken with the camera");
+                    binding.tvPhotoInfo.setVisibility(View.VISIBLE);
                     fetchLocation(); // refresh GPS at the moment of capture
                 }
             });
@@ -81,6 +91,12 @@ public class ReportActivity extends AppCompatActivity {
                         }
                     });
 
+    // Picks an image from the device's shared media (the system content provider)
+    private final ActivityResultLauncher<String> galleryLauncher =
+            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+                if (uri != null) importFromGallery(uri);
+            });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -93,6 +109,7 @@ public class ReportActivity extends AppCompatActivity {
                 this, android.R.layout.simple_spinner_dropdown_item, categories));
 
         binding.btnPhoto.setOnClickListener(v -> onTakePhotoClicked());
+        binding.btnGallery.setOnClickListener(v -> galleryLauncher.launch("image/*"));
         binding.btnSubmit.setOnClickListener(v -> submitReport());
 
         fetchLocation();
@@ -109,13 +126,61 @@ public class ReportActivity extends AppCompatActivity {
         }
     }
 
-    private void launchCamera() {
+    private File photosDir() {
         File dir = new File(getFilesDir(), "photos");
         if (!dir.exists()) dir.mkdirs();
-        pendingFile = new File(dir, "IMG_" + System.currentTimeMillis() + ".jpg");
+        return dir;
+    }
 
+    private void launchCamera() {
+        pendingFile = new File(photosDir(), "IMG_" + System.currentTimeMillis() + ".jpg");
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pendingFile);
         takePictureLauncher.launch(uri);
+    }
+
+    // ---------------- Gallery (ContentResolver) ----------------
+
+    private void importFromGallery(Uri uri) {
+        // 1. Ask the system's media provider for the file's name and size
+        String name = "photo";
+        long size = -1;
+        try (Cursor cursor = getContentResolver().query(uri,
+                new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE},
+                null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
+                if (nameIndex >= 0 && !cursor.isNull(nameIndex)) name = cursor.getString(nameIndex);
+                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex);
+            }
+        }
+        final String fileName = name;
+        final long fileSize = size;
+
+        // 2. Copy the image into the app's private folder, off the main thread
+        final File target = new File(photosDir(), "IMG_" + System.currentTimeMillis() + ".jpg");
+        AppDatabase.dbExecutor.execute(() -> {
+            try (InputStream in = getContentResolver().openInputStream(uri);
+                 OutputStream out = new FileOutputStream(target)) {
+                if (in == null) throw new IOException("Cannot open the selected image");
+                byte[] buffer = new byte[8192];
+                int n;
+                while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+
+                runOnUiThread(() -> {
+                    photoFile = target;
+                    Glide.with(this).load(photoFile).into(binding.ivPhoto);
+                    binding.btnPhoto.setText("Take photo");
+                    binding.tvPhotoInfo.setText("From gallery: " + fileName
+                            + (fileSize >= 0 ? " (" + Formatter.formatShortFileSize(this, fileSize) + ")" : ""));
+                    binding.tvPhotoInfo.setVisibility(View.VISIBLE);
+                    fetchLocation(); // the report location is where you are now
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        "Could not read the selected image", Toast.LENGTH_LONG).show());
+            }
+        });
     }
 
     // ---------------- GPS ----------------
@@ -187,7 +252,8 @@ public class ReportActivity extends AppCompatActivity {
 
     private void submitReport() {
         if (photoFile == null) {
-            Toast.makeText(this, "Please take a photo of the hazard", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Please take or choose a photo of the hazard",
+                    Toast.LENGTH_SHORT).show();
             return;
         }
         if (!hasLocation) {

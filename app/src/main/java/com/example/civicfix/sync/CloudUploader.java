@@ -1,6 +1,7 @@
 package com.example.civicfix.sync;
 
 import android.content.Context;
+import android.util.Log;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
@@ -10,6 +11,8 @@ import com.example.civicfix.model.Report;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
 
 import org.json.JSONObject;
 
@@ -71,6 +74,14 @@ public class CloudUploader {
                 .collection("reports")
                 .document(docId)
                 .set(data), 30, TimeUnit.SECONDS);
+        // Live community counter (Realtime Database). A failure here must not fail the sync.
+        try {
+            Tasks.await(FirebaseDatabase.getInstance().getReference("stats/total")
+                    .setValue(ServerValue.increment(1)), 10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            Log.w("CivicFix", "Stats update failed", e);
+        }
+
         return new String[]{docId, photoUrl};
     }
 
@@ -142,6 +153,8 @@ public class CloudUploader {
             InputStream in = (code >= 200 && code < 300)
                     ? conn.getInputStream() : conn.getErrorStream();
             String body = readAll(in);
+            Log.d("CivicFix", "Cloudinary response: " + body);
+
             if (code < 200 || code >= 300) {
                 throw new IOException("Cloudinary upload failed (" + code + "): " + body);
             }

@@ -34,6 +34,8 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
 
 import java.io.File;
 import java.text.DateFormat;
@@ -331,6 +333,12 @@ public class IssueDetailActivity extends AppCompatActivity {
                 update.put("statusHistory", FieldValue.arrayUnion(historyEntry("Resolved")));
 
                 Tasks.await(reportRef(reportId).update(update), 30, TimeUnit.SECONDS);
+                try {
+                    Tasks.await(FirebaseDatabase.getInstance().getReference("stats/resolved")
+                            .setValue(ServerValue.increment(1)), 10, TimeUnit.SECONDS);
+                } catch (Exception statsError) {
+                    Log.w(TAG, "Stats update failed", statsError);
+                }
 
                 runOnUiThread(() -> {
                     setBusy(false);

@@ -1,17 +1,24 @@
 package com.example.civicfix;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.view.Menu;
-import android.view.MenuItem;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.example.civicfix.adapter.ReportAdapter;
@@ -20,13 +27,18 @@ import com.example.civicfix.db.AppDatabase;
 import com.example.civicfix.model.FeedItem;
 import com.example.civicfix.model.Report;
 import com.example.civicfix.network.ConnectivityReceiver;
-import com.example.civicfix.ui.ReportActivity;
-import com.example.civicfix.ui.IssueDetailActivity;
-import com.example.civicfix.util.NetworkUtil;
-import com.example.civicfix.ui.OfficerLoginActivity;
 import com.example.civicfix.ui.EmergencyActivity;
+import com.example.civicfix.ui.IssueDetailActivity;
+import com.example.civicfix.ui.OfficerLoginActivity;
+import com.example.civicfix.ui.ReportActivity;
+import com.example.civicfix.util.NetworkUtil;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -47,15 +59,29 @@ public class MainActivity extends AppCompatActivity {
     private ReportAdapter adapter;
     private ListenerRegistration feedListener;
 
+    private DatabaseReference statsRef;
+    private ValueEventListener statsListener;
+
     private List<FeedItem> allItems = new ArrayList<>();
     private String selectedDept = null;    // null means "All"
     private String selectedStatus = null;  // null means "All"
+
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(),
+                    granted -> { /* the upload still works without notifications */ });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        // Android 13+ needs permission to show the upload notifications
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+        }
 
         adapter = new ReportAdapter(this::toggleVote);
         adapter.setOnOpenListener(item -> {
@@ -100,11 +126,34 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        // Offline banner
-        ConnectivityReceiver.online.observe(this, isOnline ->
-                binding.tvOffline.setVisibility(
-                        Boolean.TRUE.equals(isOnline) ? View.GONE : View.VISIBLE));
+        // System broadcast events: connectivity, airplane mode, low battery
+        ConnectivityReceiver.online.observe(this, v -> updateBanner());
+        ConnectivityReceiver.airplaneMode.observe(this, v -> updateBanner());
+        ConnectivityReceiver.batteryLow.observe(this, v -> updateBanner());
     }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        ensureSignedIn();
+        startFeedListener();
+        startStatsListener();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (feedListener != null) {
+            feedListener.remove();
+            feedListener = null;
+        }
+        if (statsRef != null && statsListener != null) {
+            statsRef.removeEventListener(statsListener);
+        }
+        statsListener = null;
+    }
+
+    // ---------------- Menu ----------------
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -127,20 +176,65 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        ensureSignedIn();
-        startFeedListener();
+    // ---------------- Status banner (system broadcasts) ----------------
+
+    private void updateBanner() {
+        boolean airplane = Boolean.TRUE.equals(ConnectivityReceiver.airplaneMode.getValue());
+        boolean online = !Boolean.FALSE.equals(ConnectivityReceiver.online.getValue());
+        boolean batteryLow = Boolean.TRUE.equals(ConnectivityReceiver.batteryLow.getValue());
+
+        String message = null;
+        int color = 0xFFC62828;
+
+        if (airplane) {
+            message = "✈️ Airplane mode is on. New reports are saved on your phone "
+                    + "and will upload when you're back online.";
+        } else if (!online) {
+            message = "You're offline. New reports are saved safely on your phone.";
+        } else if (batteryLow) {
+            message = "🪫 Battery is low. Uploads still work, but consider charging soon.";
+            color = 0xFFE65100;
+        }
+
+        if (message == null) {
+            binding.tvOffline.setVisibility(View.GONE);
+        } else {
+            binding.tvOffline.setText(message);
+            binding.tvOffline.setBackgroundColor(color);
+            binding.tvOffline.setVisibility(View.VISIBLE);
+        }
     }
 
-    @Override
-    protected void onStop() {
-        super.onStop();
-        if (feedListener != null) {
-            feedListener.remove();
-            feedListener = null;
+    // ---------------- Realtime Database: live community counter ----------------
+
+    private void startStatsListener() {
+        if (statsListener != null) return;
+        try {
+            statsRef = FirebaseDatabase.getInstance().getReference("stats");
+            statsListener = new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    binding.tvStats.setText("📊 " + count(snapshot.child("total"))
+                            + " reported · " + count(snapshot.child("resolved")) + " resolved");
+                    binding.tvStats.setVisibility(View.VISIBLE);
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+                    Log.w(TAG, "Stats listener cancelled: " + error.getMessage());
+                }
+            };
+            statsRef.addValueEventListener(statsListener);
+        } catch (Exception e) {
+            // Usually means google-services.json was downloaded before the database existed
+            Log.w(TAG, "Realtime Database is not available", e);
+            statsListener = null;
         }
+    }
+
+    private long count(DataSnapshot snapshot) {
+        Long value = snapshot.getValue(Long.class);
+        return value == null ? 0 : value;
     }
 
     // ---------------- Identity (anonymous sign-in) ----------------
