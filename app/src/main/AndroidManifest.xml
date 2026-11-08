@@ -80,6 +80,11 @@
             android:exported="false"
             android:label="My reports" />
 
+        <activity
+            android:name=".ui.PhotoViewerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
     </application>
 
 </manifest>

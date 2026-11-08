@@ -61,6 +61,7 @@ public class IssueDetailActivity extends AppCompatActivity {
     private String officerDept = null;   // set when the signed-in user is an officer
     private File proofFile;
     private boolean busy = false;
+    private String afterPhotoUrl;    // set when the report has a proof-of-fix photo
 
     // ---------------- Proof-of-fix: camera and gallery ----------------
 
@@ -105,6 +106,12 @@ public class IssueDetailActivity extends AppCompatActivity {
         });
         b.btnInspect.setOnClickListener(v -> updateStatus("Under Inspection"));
         b.btnResolve.setOnClickListener(v -> startResolve());
+        b.ivPhoto.setOnClickListener(v ->
+                openPhoto(current != null ? current.photoUrl : null, "Reported hazard"));
+        b.ivBefore.setOnClickListener(v ->
+                openPhoto(current != null ? current.photoUrl : null, "Before the repair"));
+        b.ivAfter.setOnClickListener(v -> openPhoto(afterPhotoUrl, "After the repair"));
+
     }
 
     @Override
@@ -224,6 +231,7 @@ public class IssueDetailActivity extends AppCompatActivity {
 
         // Before and after photos
         String after = doc.getString("afterPhotoUrl");
+        afterPhotoUrl = after;
         if (after != null && !after.isEmpty()) {
             b.proofSection.setVisibility(View.VISIBLE);
             Glide.with(this).load(f.photoUrl).into(b.ivBefore);
@@ -411,6 +419,14 @@ public class IssueDetailActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private void openPhoto(String url, String title) {
+        if (url == null || url.isEmpty()) return;
+        Intent intent = new Intent(this, PhotoViewerActivity.class);
+        intent.putExtra(PhotoViewerActivity.EXTRA_URL, url);
+        intent.putExtra(PhotoViewerActivity.EXTRA_TITLE, title);
+        startActivity(intent);
     }
 
     // ---------------- Navigation (implicit intents) ----------------

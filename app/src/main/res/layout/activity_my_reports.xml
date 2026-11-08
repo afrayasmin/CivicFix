@@ -32,7 +32,7 @@
             android:layout_gravity="center"
             android:gravity="center"
             android:padding="32dp"
-            android:text="No reports from this phone yet."
+            android:text="No reports saved on this phone yet.\nReports you sent earlier are still in the community feed."
             android:visibility="gone" />
     </FrameLayout>
 </LinearLayout>
