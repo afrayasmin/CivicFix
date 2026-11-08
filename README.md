@@ -4,8 +4,8 @@
 
 Citizens photograph a public hazard (pothole, dead streetlight, open manhole, water leak, overflowing bin). The app tags the report with GPS and a street address, and saves it on the phone even with no internet. When the connection returns, reports upload automatically in the background. Neighbours upvote the hazards that matter, and municipal officers resolve them with photographic proof that citizens can see.
 
-- **Course:** Advanced Programming Laboratory
-- **Author:** AFRA YASMIN
+- **Course:** advanced Programming Laboratory
+- **Author:** Afra Yasmin (Roll:2307052)
 - **Platform:** Android 8.0+ (min SDK 26), target SDK 34, Java
 
 ---
@@ -25,7 +25,8 @@ Citizens photograph a public hazard (pothole, dead streetlight, open manhole, wa
 11. [Using the app](#11-using-the-app)
 12. [Troubleshooting](#12-troubleshooting)
 13. [Limitations and future work](#13-limitations-and-future-work)
-14. [Credits](#15-credits)
+14. [Screenshots](#14-screenshots)
+15. [Credits](#15-credits)
 
 > **How to read the code locations.** Java paths are relative to `app/src/main/java/com/example/civicfix/` and layouts are in `app/src/main/res/layout/`. Locations are given as `File → method`, so you can find them with **Ctrl + Shift + F** (Find in Files) in Android Studio.
 
@@ -60,6 +61,7 @@ The app has two sides: a public side for citizens, and an officer side for munic
 | **Upload notification** | Shows live progress ("Uploading report 2 of 3") and a "reports uploaded" message in the notification tray | `util/NotificationHelper.java`; started from `sync/SyncWorker.java → showProgress()` |
 | **Offline, airplane mode and low-battery banners** | Tells the citizen why uploads are waiting, using system broadcast events | `network/ConnectivityReceiver.java → onReceive()`; shown by `MainActivity.java → updateBanner()` |
 | **"Waiting to upload" bar** | Shows how many reports are still queued on this phone | `MainActivity.java → onCreate()` (observes `ReportDao.getPendingCountLive()`) |
+| **My reports** | Lists every report saved on this phone with its sync status, opens uploaded ones, and lets the citizen delete a report that has not been uploaded yet | `ui/MyReportsActivity.java`, `adapter/MyReportAdapter.java`, `db/ReportDao.java → getAllLive(), deletePending()`; menu item in `MainActivity.java → onCreateOptionsMenu()` |
 | **Live community feed** | Shows every report on every phone in real time, as cards with photo, department, status, address and time | `MainActivity.java → startFeedListener()`, `adapter/ReportAdapter.java`, layout `item_report.xml` |
 | **Department and status filters** | Narrows the feed by department and by lifecycle status. The two filters combine | `MainActivity.java → setupChips(), applyFilter()`; style `res/drawable/bg_chip.xml` |
 | **Upvoting ("I noticed this too")** | Lets neighbours confirm a hazard. One vote per person, tap again to remove it | `MainActivity.java → toggleVote()` (Firestore transaction), `adapter/ReportAdapter.java → bind()` |
@@ -69,10 +71,11 @@ The app has two sides: a public side for citizens, and an officer side for munic
 | **Issue detail screen** | Shows the full photo, description, address, time and votes of one report, updating live | `ui/IssueDetailActivity.java → onStart(), bind()`; layout `activity_issue_detail.xml` |
 | **Status tracker (custom view)** | Three-stage progress: 🟡 Submitted, 🔵 Under Inspection, 🟢 Resolved | `view/StatusTrackerView.java → setStep(), onMeasure(), onDraw()` (a class that extends `View` and draws itself with `Canvas`); used in `ui/IssueDetailActivity.java → bind()` |
 | **Before and after photos** | Shows the repair proof beside the original photo once a report is resolved | `ui/IssueDetailActivity.java → bind()` (view `proofSection`) |
+| **Full-screen photo viewer** | Tap any report photo (original, before or after) to see it full-screen. Pinch to zoom, drag to pan, double-tap to zoom in and out, tap once to hide the controls | `ui/PhotoViewerActivity.java`, `view/ZoomImageView.java`; opened from `ui/IssueDetailActivity.java → openPhoto()` |
 | **Activity log (audit trail)** | Lists every status change with time and officer email | `ui/IssueDetailActivity.java → historyEntry(), bind()` |
 | **Navigation to the hazard** | Opens Google Maps with turn-by-turn directions to the report location | `ui/IssueDetailActivity.java → navigate()` (implicit intent) |
 | **One-tap grievance email** | Opens the email app with a ready-made complaint addressed to the council, with GPS, map link and photo attached | `util/GrievanceMailer.java → send(), launchEmail()`; address in `util/CivicConfig.java` |
-| **Emergency hotlines (SOS)** | One-touch dialer for fire, electricity, water and municipal helpline numbers | `ui/EmergencyActivity.java → dial()`; numbers in `util/CivicConfig.java → HOTLINES`; menu item in `MainActivity.java → onCreateOptionsMenu()` |
+| **Emergency hotlines (SOS)** | One-touch dialer for the national emergency number, fire service, electricity, water and the municipal helpline. It only opens the dialer, so the user presses call themselves | `ui/EmergencyActivity.java → dial()`; numbers in `util/CivicConfig.java → HOTLINES`; menu item in `MainActivity.java → onCreateOptionsMenu()` |
 
 ### 2.2 Officer features
 
@@ -102,14 +105,14 @@ This table maps the demonstration points from the final project guidelines to th
 
 | Requirement | How CivicFix meets it | Where in the code |
 |---|---|---|
-| **Multi-Activity navigation** | Six screens: feed, report form, detail, officer login, officer queue, emergency | `AndroidManifest.xml`; navigation in `MainActivity.java` and `ui/*Activity.java` |
+| **Multi-Activity navigation** | Eight screens: feed, report form, detail, my reports, photo viewer, officer login, officer queue, emergency | `AndroidManifest.xml`; navigation in `MainActivity.java` and `ui/*Activity.java` |
 | **Explicit intents** | Opening our own screens, passing the report id as an extra | `MainActivity.java → setOnOpenListener(...)`, `ui/OfficerQueueActivity.java → onCreate()`, `ui/OfficerLoginActivity.java → verifyAndOpen()` |
 | **Implicit intents** | Maps navigation, email with attachment, phone dialer, gallery picker, camera | `ui/IssueDetailActivity.java → navigate()`, `util/GrievanceMailer.java → launchEmail()`, `ui/EmergencyActivity.java → dial()`, `ui/ReportActivity.java → galleryLauncher / takePictureLauncher` |
 | **View Binding** | Enabled in Gradle and used by every screen and by the adapter | `app/build.gradle` (`buildFeatures { viewBinding true }`); `ActivityMainBinding`, `ActivityReportBinding`, `ItemReportBinding` and others |
 | **Event handling** | Click listeners, radio group listener, chip selection, LiveData observers, Firestore snapshot listeners | `MainActivity.java → setupChips()`, `ui/OfficerQueueActivity.java → rgView.setOnCheckedChangeListener`, `ui/ReportActivity.java → onCreate()` |
 | **Layouts** | LinearLayout, FrameLayout, ScrollView, HorizontalScrollView and CardView layouts | `res/layout/*.xml` |
-| **RecyclerView, Adapter, ViewHolder** | Feed and officer queue use one `ListAdapter` with a `ViewHolder` and `DiffUtil` for smooth live updates | `adapter/ReportAdapter.java` (`ReportAdapter`, `VH`, `DIFF`); layout `item_report.xml` |
-| **Custom Views** | `StatusTrackerView` extends `View`, measures itself, draws circles, connectors, check marks and labels on a `Canvas`, animates between steps with a `ValueAnimator`, and sets a content description for screen readers | `view/StatusTrackerView.java` (`onMeasure()`, `onSizeChanged()`, `onDraw()`, `setStep()`); used in `activity_issue_detail.xml` as `<com.example.civicfix.view.StatusTrackerView>` |
+| **RecyclerView, Adapter, ViewHolder** | Feed and officer queue share one `ListAdapter` with a `ViewHolder` and `DiffUtil` for smooth live updates. My reports uses a second adapter | `adapter/ReportAdapter.java` (`ReportAdapter`, `VH`, `DIFF`), `adapter/MyReportAdapter.java`; layouts `item_report.xml`, `item_my_report.xml` |
+| **Custom Views** | `StatusTrackerView` extends `View`, measures itself, draws circles, connectors, check marks and labels on a `Canvas`, animates between steps with a `ValueAnimator`, and sets a content description for screen readers | `view/StatusTrackerView.java` (`onMeasure()`, `onSizeChanged()`, `onDraw()`, `setStep()`); used in `activity_issue_detail.xml` as `<com.example.civicfix.view.StatusTrackerView>`. A second custom view, `view/ZoomImageView.java`, handles pinch-to-zoom, panning and double-tap with touch gesture detectors |
 | **Broadcast receivers (system events)** | Reacts to connectivity changes, airplane mode, low battery and battery okay | `network/ConnectivityReceiver.java`; registered in `CivicFixApp.java → onCreate()`; UI in `MainActivity.java → updateBanner()` |
 | **Content providers** | Reads shared device media through `ContentResolver` (gallery). Shares private photos with the camera and email apps through `FileProvider` | `ui/ReportActivity.java → importFromGallery()`, `ui/IssueDetailActivity.java → importProofFromGallery()`; `AndroidManifest.xml` `<provider>`; `res/xml/file_paths.xml`; `util/GrievanceMailer.java` |
 | **Services and notifications** | Background sync runs as a WorkManager foreground service (`SystemForegroundService`, type `dataSync`) with a live progress notification | `sync/SyncWorker.java → showProgress()`; `util/NotificationHelper.java`; service declared in `AndroidManifest.xml` |
@@ -120,7 +123,7 @@ This table maps the demonstration points from the final project guidelines to th
 | **Cloud Firestore** | Reports, votes, officer profiles, status history, live listeners and transactions | `sync/CloudUploader.java`; `MainActivity.java → startFeedListener(), toggleVote()`; `ui/IssueDetailActivity.java`; `ui/OfficerQueueActivity.java` |
 | **Firebase Realtime Database** | A live community counter (`stats/total`, `stats/resolved`) | `MainActivity.java → startStatsListener()`; `sync/CloudUploader.java → upload()`; `ui/IssueDetailActivity.java → uploadProofAndResolve()` |
 | **Picture storage** | Photos are stored on Cloudinary (Firebase Storage needed a paid plan). Each report keeps the photo URL. A local copy stays in the app's private storage until synced | `sync/CloudUploader.java`; local files in `ui/ReportActivity.java → photosDir()` |
-| **Local database** | Room (SQLite) holds the offline queue | `db/AppDatabase.java`, `db/ReportDao.java`, `model/Report.java` |
+| **Local database** | Room (SQLite) holds the offline queue. A second RecyclerView lists it, and an unsent report can be deleted | `db/AppDatabase.java`, `db/ReportDao.java`, `model/Report.java`; list and delete in `ui/MyReportsActivity.java` |
 | **Layout responsiveness** | Weight-based layouts, `match_parent` and scrolling containers. All screens except the report form rotate freely | `res/layout/*.xml`; `AndroidManifest.xml` |
 
 ---
@@ -134,6 +137,9 @@ flowchart TD
     Main[MainActivity<br/>live feed, filters, votes] -->|Report a hazard| Report[ReportActivity<br/>camera, gallery, GPS]
     Main -->|tap a card| Detail[IssueDetailActivity<br/>tracker, maps, email]
     Main -->|SOS| SOS[EmergencyActivity<br/>hotline dialer]
+    Main -->|menu: My reports| Mine[MyReportsActivity<br/>reports on this phone]
+    Mine -->|tap an uploaded report| Detail
+    Detail -->|tap a photo| Viewer[PhotoViewerActivity<br/>zoomable full-screen photo]
     Main -->|menu: Officer login| Login[OfficerLoginActivity]
     Login -->|verified officer| Queue[OfficerQueueActivity<br/>department queue]
     Queue -->|tap a report| Detail
@@ -163,7 +169,7 @@ flowchart LR
 
 | Layer | Classes |
 |---|---|
-| **UI** | `MainActivity`, `ui/*Activity`, `adapter/ReportAdapter` and the layouts |
+| **UI** | `MainActivity`, `ui/*Activity`, `adapter/*Adapter`, the custom views in `view/` and the layouts |
 | **Local data** | `db/AppDatabase`, `db/ReportDao`, `model/Report` |
 | **Cloud data** | Firebase (Firestore, Auth, Realtime Database) and Cloudinary, reached through `sync/CloudUploader` and the listeners in the activities |
 | **Background work** | `sync/SyncWorker`, `sync/SyncScheduler`, `network/ConnectivityReceiver`, `CivicFixApp` |
@@ -253,6 +259,7 @@ The phone dialer uses `ACTION_DIAL`, which needs no permission, because the user
 CivicFix/
 ├── README.md
 ├── firestore.rules
+├── docs/                               screenshots used in this README
 ├── app/
 │   ├── build.gradle
 │   ├── google-services.json
@@ -262,7 +269,8 @@ CivicFix/
 │       │   ├── CivicFixApp.java            registers receivers, creates channels, starts sync
 │       │   ├── MainActivity.java           feed, filters, voting, stats, banners
 │       │   ├── adapter/
-│       │   │   └── ReportAdapter.java      RecyclerView adapter and ViewHolder
+│       │   │   ├── ReportAdapter.java      RecyclerView adapter and ViewHolder (feed, officer queue)
+│       │   │   └── MyReportAdapter.java    adapter for the reports saved on this phone
 │       │   ├── db/
 │       │   │   ├── AppDatabase.java        Room database
 │       │   │   └── ReportDao.java          queries for the offline queue
@@ -281,16 +289,19 @@ CivicFix/
 │       │   │   ├── IssueDetailActivity.java
 │       │   │   ├── OfficerLoginActivity.java
 │       │   │   ├── OfficerQueueActivity.java
-│       │   │   └── EmergencyActivity.java
+│       │   │   ├── EmergencyActivity.java
+│       │   │   ├── MyReportsActivity.java  reports saved on this phone, delete before sync
+│       │   │   └── PhotoViewerActivity.java  full-screen zoomable photo
 │       │   ├── view/
-│       │   │   └── StatusTrackerView.java  custom View drawn with Canvas
+│       │   │   ├── StatusTrackerView.java  custom View drawn with Canvas
+│       │   │   └── ZoomImageView.java      custom View with pinch zoom and pan
 │       │   └── util/
 │       │       ├── CivicConfig.java        council email, hotline numbers
 │       │       ├── GrievanceMailer.java    email intent with attachment
 │       │       ├── NetworkUtil.java        online check
 │       │       └── NotificationHelper.java notification channels and builders
 │       └── res/
-│           ├── layout/                     one layout per screen, plus item_report.xml
+│           ├── layout/                     one layout per screen, plus item_report.xml and item_my_report.xml
 │           ├── drawable/                   bg_badge.xml, bg_chip.xml
 │           └── xml/file_paths.xml          FileProvider folders
 ```
@@ -309,6 +320,30 @@ CivicFix/
 | Firebase | Cloud Firestore, Authentication, Realtime Database (BoM 32.7.0) |
 | Photo hosting | Cloudinary free tier with an unsigned upload preset |
 | Geocoding | OpenStreetMap Nominatim REST API |
+| Custom views | `StatusTrackerView` (Canvas drawing and animation), `ZoomImageView` (touch gestures) |
+
+### 9.1 APIs used
+
+**REST APIs called over HTTP and parsed as JSON**
+
+| API | What it does in the app | Request | Where in the code |
+|---|---|---|---|
+| **OpenStreetMap Nominatim** (reverse geocoding) | Turns GPS coordinates into a street address | `GET https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=<lat>&lon=<lon>&zoom=18&addressdetails=1`, read with `HttpURLConnection` and `org.json` | `network/GeocodingClient.java → reverse()`, used by `ui/ReportActivity.java → lookupAddress()` and `sync/SyncWorker.java → doWork()` |
+| **Cloudinary Upload API** | Stores each report photo and returns its public URL | `POST https://api.cloudinary.com/v1_1/<cloud name>/image/upload` as `multipart/form-data` with the fields `upload_preset` and `file` | `sync/CloudUploader.java → uploadToCloudinary()` |
+
+The app reads `address.road`, `address.suburb` (or `neighbourhood`) and `address.city` (or `town`) from the Nominatim response, and falls back to `display_name`. From the Cloudinary response it reads `secure_url`, which is saved in the report as `photoUrl`. To see the raw responses, open the Nominatim URL in a browser with your own coordinates, and look for the `Cloudinary response:` line in Logcat (filter `tag:CivicFix`).
+
+**SDK APIs**
+
+| API | Use | Where in the code |
+|---|---|---|
+| Firebase Authentication | Anonymous sign-in for citizens, email and password for officers | `MainActivity.java → ensureSignedIn()`, `ui/OfficerLoginActivity.java → login()` |
+| Cloud Firestore | Reports, votes, officer profiles, live feed | `sync/CloudUploader.java`, `MainActivity.java`, `ui/IssueDetailActivity.java`, `ui/OfficerQueueActivity.java` |
+| Firebase Realtime Database | Live "reported · resolved" counter | `MainActivity.java → startStatsListener()` |
+| Fused Location Provider | GPS position | `ui/ReportActivity.java → fetchLocation()` |
+| Android platform APIs | WorkManager, notifications, ConnectivityManager, ContentResolver, FileProvider | `sync/`, `util/NotificationHelper.java`, `network/ConnectivityReceiver.java`, `ui/ReportActivity.java` |
+
+Google Maps is opened through an intent (`google.navigation:`), so it needs no API key and is not a REST call.
 
 ---
 
@@ -338,6 +373,8 @@ CivicFix/
 3. With no internet, the report appears under the orange "waiting to upload" bar. When the connection returns, a notification shows the upload progress.
 4. In the feed, filter by department and status, tap **I noticed this too** to vote, and tap a card to see the details, navigate to the site, or email the council.
 5. The **🚨 SOS** button in the top bar opens the emergency hotline dialer.
+6. **⋮ > My reports** lists the reports saved on this phone. A report that has not been uploaded yet can be deleted.
+7. On the detail screen, tap any photo to see it full-screen. Pinch or double-tap to zoom, and tap once to hide the controls.
 
 **As an officer**
 1. Open **⋮ > Officer login** and sign in.
@@ -359,6 +396,8 @@ CivicFix/
 | Officer queue is empty | The officer's `department` text does not match the reports' `category` exactly |
 | No upload notification | Allow notifications for the app. On Xiaomi, also set **Battery saver > No restrictions** and enable **Autostart** |
 | Sync waits until the app is reopened | Swiping the app away force-stops it on some phones, which cancels scheduled work until the next launch. Press Home instead of swiping the app away |
+| My reports is empty after reinstalling the app | That list reads the phone's local database, which is deleted with the app. Reports that were already uploaded are still in the community feed |
+| The photo viewer says it could not load the photo | The phone is offline or the photo link is broken. Check the connection and open the photo again |
 
 ---
 
@@ -371,10 +410,28 @@ CivicFix/
 - Official hotline numbers and the council email must be filled in for each city.
 - Officer accounts are created by hand. A real deployment would need an admin tool.
 - Nominatim is free for light use only (about one request per second), so a high-traffic app would need its own geocoding service.
+- **My reports** only lists reports made from the current install, because citizens have no account that could restore older ones.
+- The app is English only. UI text is written directly in the layouts and code.
 
 ---
 
-## 14. Credits
+## 14. Screenshots
+
+| Feed | Report form | Detail and tracker | Officer queue |
+|---|---|---|---|
+| ![Feed](docs/feed.png) | ![Report form](docs/report.png) | ![Detail](docs/detail.png) | ![Officer queue](docs/officer.png) |
+
+| Offline banner | Upload notification | Before and after | SOS |
+|---|---|---|---|
+| ![Offline](docs/offline.png) | ![Notification](docs/notification.png) | ![Proof](docs/proof.png) | ![SOS](docs/sos.png) |
+
+| My reports | Photo viewer | Airplane mode banner | Live counter |
+|---|---|---|---|
+| ![My reports](docs/myreports.png) | ![Photo viewer](docs/viewer.png) | ![Airplane mode](docs/airplane.png) | ![Counter](docs/stats.png) |
+
+---
+
+## 15. Credits
 
 - Address lookup: © OpenStreetMap contributors, through the Nominatim API
 - Photo hosting: Cloudinary
